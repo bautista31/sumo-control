@@ -1,0 +1,14 @@
+{
+  "name": "Sumo — control BLE",
+  "short_name": "Sumo BLE",
+  "description": "Configuración y telemetría del robot sumo por Bluetooth LE.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14161a",
+  "theme_color": "#14161a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

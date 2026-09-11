@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Sumo — control BLE</title>
+<meta name="theme-color" content="#14161a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  :root{--bg:#14161a;--card:#1a1d22;--card2:#12141a;--bd:#262a31;--fg:#e8eaed;--mut:#9aa3ad;
+        --blue:#2b6cff;--grn:#3ad07a;--red:#ff5a5a;--sel:#2b6cff;}
+  *{box-sizing:border-box}
+  body{margin:0;padding:14px;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--fg)}
+  h1{font-size:19px;margin:0 0 4px}h2{font-size:14px;margin:14px 0 6px;color:#9fb3d0}
+  .sub{color:var(--mut);font-size:12px;margin:0 0 10px}
+  section{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+  button{font-family:inherit;font-size:15px;border:0;border-radius:10px;padding:13px 10px;background:#333842;color:#fff;font-weight:600}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg button{flex:1;min-width:70px;background:#22262d;color:#cfd6de;border:1px solid #2f343d}
+  .seg button.sel{background:var(--sel);color:#fff;border-color:var(--sel)}
+  .full{width:100%}
+  .connect{background:var(--blue)}
+  .fin{background:var(--grn);color:#062;font-size:18px;padding:18px;border-radius:14px;font-weight:700}
+  .stop{background:#c0392b}
+  .row{display:flex;gap:8px;margin-top:8px}
+  .row>*{flex:1}
+  .pill{display:inline-block;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:600}
+  .on{background:#123d24;color:var(--grn)}.off{background:#3a1a1a;color:var(--red)}
+  .status{font-size:13px;color:var(--mut);margin-top:8px}
+  .hide{display:none}
+  .tel{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px}
+  .tel .b{background:var(--card2);border-radius:8px;padding:8px;display:flex;justify-content:space-between;align-items:center}
+  .dot{width:12px;height:12px;border-radius:50%;background:#333;display:inline-block}
+  .dot.hi{background:var(--grn)}
+  .big{font-size:26px;font-weight:800;text-align:center;margin:6px 0}
+  .hint{font-size:12px;color:var(--mut);text-align:center;margin-top:4px}
+  svg{width:100%;height:150px;background:var(--card2);border-radius:10px;margin:6px 0}
+  .sw{display:flex;align-items:center;justify-content:space-between;background:#22262d;border:1px solid #2f343d;border-radius:10px;padding:10px 12px;margin-top:8px}
+  .toggle{width:46px;height:26px;border-radius:20px;background:#444;position:relative;transition:.15s}
+  .toggle.on{background:var(--grn)}
+  .toggle b{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.15s}
+  .toggle.on b{left:23px}
+  .warn{background:#3a2a12;border:1px solid #6b4d1a;color:#f5c37a;border-radius:10px;padding:10px;font-size:13px}
+</style>
+</head>
+<body>
+<h1>Sumo — control BLE</h1>
+<p class="sub">Chrome de Android. Encendé el robot con el botón apretado (azul) y conectá.</p>
+
+<div id="noble" class="warn hide">Este navegador no soporta Web Bluetooth. Usá <b>Chrome</b> en Android.</div>
+
+<section>
+  <button id="btnConn" class="full connect">Conectar al robot</button>
+  <div class="row" style="margin-top:8px">
+    <input id="pin" inputmode="numeric" placeholder="PIN" style="flex:0 0 90px">
+    <span class="status" style="flex:1;align-self:center">PIN del robot (igual al del firmware)</span>
+  </div>
+  <div class="status" id="connStatus">Desconectado.</div>
+</section>
+
+<div id="app" class="hide">
+
+<section>
+  <h2>Tu posición</h2>
+  <div class="seg" id="segSide"></div>
+  <div class="seg" id="segFace" style="margin-top:6px"></div>
+  <h2>Rival (dónde arranca respecto a tu frente)</h2>
+  <div class="seg" id="segOff"></div>
+  <svg id="diag" viewBox="0 0 300 150" aria-label="posiciones"></svg>
+</section>
+
+<section>
+  <h2>Arranque</h2>
+  <div class="seg" id="segLaunch"></div>
+  <div class="sw"><span>Completar arranque sí o sí<br><span class="hint" style="text-align:left">si NO, aborta y ataca al detectar</span></span>
+    <div class="toggle" id="tgForce"><b></b></div></div>
+  <h2>Búsqueda</h2>
+  <div class="seg" id="segSearch"></div>
+  <h2>Agresividad</h2>
+  <div class="seg" id="segAggr"></div>
+</section>
+
+<section>
+  <button id="btnFin" class="full fin">✓ FIN DE CONFIG</button>
+  <div class="hint">Al tocar, el robot queda VERDE (armado). Después apretá y soltá el botón del robot → cuenta 5 s → combate.</div>
+</section>
+
+<section>
+  <h2>Estado del robot</h2>
+  <div class="big" id="stName">—</div>
+  <div class="tel" id="tel">
+    <div class="b"><span>IR frente izq</span><span class="dot" id="d_ir_fl"></span></div>
+    <div class="b"><span>IR frente der</span><span class="dot" id="d_ir_fr"></span></div>
+    <div class="b"><span>IR lat izq</span><span class="dot" id="d_ir_sl"></span></div>
+    <div class="b"><span>IR lat der</span><span class="dot" id="d_ir_sr"></span></div>
+    <div class="b"><span>Línea izq</span><span class="dot" id="d_line_l"></span></div>
+    <div class="b"><span>Línea der</span><span class="dot" id="d_line_r"></span></div>
+    <div class="b"><span>Láser</span><span id="v_laser">— mm</span></div>
+    <div class="b"><span>Uptime</span><span id="v_up">— s</span></div>
+  </div>
+  <div class="row">
+    <button id="btnMot">Motores</button>
+    <button id="btnStop" class="stop" style="display:none">■ STOP</button>
+  </div>
+  <div class="hint" id="stopHint">El STOP aparece solo cuando el robot está peleando.</div>
+</section>
+
+</div>
+
+<script>
+const SVC='9a1e0001-7c9e-4b2a-9c3d-1f2e3a4b5c6d';
+const CMD='9a1e0002-7c9e-4b2a-9c3d-1f2e3a4b5c6d';
+const TEL='9a1e0003-7c9e-4b2a-9c3d-1f2e3a4b5c6d';
+const BLE_NAME='Sumo-Robot';   // debe coincidir con BLE_DEVICE_NAME del firmware
+
+const CFG={mySide:'L',myFacing:'F',enemyOffset:'ALIGN',launch:'DIRECT',forceLaunch:false,search:'SPIN',aggr:'CALM'};
+let device=null, cmdChar=null, telChar=null, motorsOn=true, connecting=false, autoTimer=null, userDisc=false;
+let PIN='1234'; try{ PIN=localStorage.getItem('sumoPin')||'1234'; }catch(e){}
+
+const $=id=>document.getElementById(id);
+const enc=new TextEncoder(), dec=new TextDecoder();
+
+// --- selectores segmentados ---
+function seg(host,field,opts){
+  const el=$(host); el.innerHTML='';
+  opts.forEach(([label,val])=>{
+    const b=document.createElement('button');
+    b.textContent=label; if(CFG[field]===val) b.classList.add('sel');
+    b.onclick=()=>{CFG[field]=val;[...el.children].forEach(c=>c.classList.remove('sel'));b.classList.add('sel');drawDiag();};
+    el.appendChild(b);
+  });
+}
+seg('segSide','mySide',[['Izquierda','L'],['Derecha','R']]);
+seg('segFace','myFacing',[['Mira al frente','F'],['Mira atrás','B']]);
+seg('segOff','enemyOffset',[['Adelante','FWD'],['Alineado','ALIGN'],['Atrás','BACK']]);
+seg('segLaunch','launch',[['Directo','DIRECT'],['Giro lento','TURN_SLOW'],['Arco','ARC'],['Paciente','PATIENT']]);
+seg('segSearch','search',[['Ocho','FIG8'],['Polígono','POLY'],['Giro alt','ALT_SPIN'],['Spin','SPIN'],['Barrido','SWEEP']]);
+seg('segAggr','aggr',[['Tranquilo','CALM'],['Bruto','ROUGH']]);
+$('tgForce').onclick=()=>{CFG.forceLaunch=!CFG.forceLaunch;$('tgForce').classList.toggle('on',CFG.forceLaunch);};
+
+// --- diagrama de posiciones ---
+function robot(x,y,up,f,s){
+  const t=up?`${x-8},${y-16} ${x+8},${y-16} ${x},${y-24}`:`${x-8},${y+16} ${x+8},${y+16} ${x},${y+24}`;
+  return `<rect x="${x-11}" y="${y-16}" width="22" height="32" rx="4" fill="${f}" stroke="${s}" stroke-width="1.5"/><polygon points="${t}" fill="${s}"/>`;
+}
+function drawDiag(){
+  const cx=150,cy=75,leftX=100,rightX=200;
+  const myX=CFG.mySide==='L'?leftX:rightX, enX=CFG.mySide==='L'?rightX:leftX;
+  const up=CFG.myFacing==='F';
+  let dy=CFG.enemyOffset==='ALIGN'?0:CFG.enemyOffset==='FWD'?-45:45; if(!up)dy=-dy;
+  const enY=cy+dy;
+  $('diag').innerHTML=
+    `<line x1="${cx}" y1="10" x2="${cx}" y2="140" stroke="#333" stroke-dasharray="4 4"/>`+
+    `<line x1="${myX}" y1="${cy}" x2="${enX}" y2="${enY}" stroke="#2b6cff" stroke-width="1.5" opacity=".6"/>`+
+    robot(myX,cy,up,'#123026','#3ad07a')+
+    `<text x="${myX}" y="${cy+34}" fill="#3ad07a" font-size="9" text-anchor="middle" font-family="monospace">VOS</text>`+
+    robot(enX,enY,up,'#301717','#ff5a5a')+
+    `<text x="${enX}" y="${enY+34}" fill="#ff5a5a" font-size="9" text-anchor="middle" font-family="monospace">RIVAL</text>`;
+}
+drawDiag();
+
+// --- BLE: vinculado a UN robot, se conecta solo ---
+if(!navigator.bluetooth){ $('noble').classList.remove('hide'); }
+$('pin').value=PIN;
+$('pin').oninput=()=>{ PIN=$('pin').value.trim(); try{localStorage.setItem('sumoPin',PIN);}catch(e){} };
+function setStatus(t){ $('connStatus').textContent=t; }
+function send(str){ if(cmdChar){ try{ cmdChar.writeValueWithResponse(enc.encode(str)); }catch(e){ console.warn(e); } } }
+
+async function setupConn(dev){
+  device=dev;
+  dev.addEventListener('gattserverdisconnected',onDisc);   // (mismo handler = no se duplica)
+  const srv=await dev.gatt.connect();
+  const s=await srv.getPrimaryService(SVC);
+  cmdChar=await s.getCharacteristic(CMD);
+  telChar=await s.getCharacteristic(TEL);
+  await telChar.startNotifications();
+  telChar.addEventListener('characteristicvaluechanged',onTel);
+  send('pin:'+PIN);   // autenticar antes que nada (si el PIN no coincide, el robot ignora todo)
+  $('app').classList.remove('hide');
+  $('btnConn').textContent='Desconectar';
+  setStatus('Conectado a '+(dev.name||'robot')+'.');
+  stopAuto();
+}
+async function tryConnect(dev){
+  if(connecting || (dev.gatt && dev.gatt.connected)) return;
+  connecting=true;
+  try{ await setupConn(dev); }catch(e){ /* todavía no está en rango */ }
+  connecting=false;
+}
+function startAuto(dev){          // reintenta hasta enganchar (robot recién prendido)
+  device=dev; userDisc=false; stopAuto();
+  setStatus('Esperando al robot… se conecta solo al prenderlo.');
+  tryConnect(dev);
+  autoTimer=setInterval(()=>{
+    if(userDisc){ stopAuto(); return; }
+    if(device&&device.gatt&&device.gatt.connected){ stopAuto(); return; }
+    tryConnect(device);
+  },2500);
+}
+function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; } }
+function onDisc(){
+  cmdChar=null; telChar=null; $('app').classList.add('hide'); $('btnConn').textContent='Conectar';
+  if(device && !userDisc) startAuto(device);        // reconecta solo si no lo desconectaste vos
+  else setStatus('Desconectado.');
+}
+$('btnConn').onclick=async()=>{
+  if(device && device.gatt && device.gatt.connected){ userDisc=true; stopAuto(); device.gatt.disconnect(); return; }
+  if(device){ startAuto(device); return; }           // ya vinculado → conecta directo, sin buscar
+  try{
+    setStatus('Elegí el robot (solo la primera vez)…');
+    const dev=await navigator.bluetooth.requestDevice({filters:[{services:[SVC]}]});
+    startAuto(dev);
+  }catch(e){ setStatus('Conexión cancelada.'); }
+};
+// Al abrir la página: si ya quedó vinculado antes, conectar automáticamente.
+(async()=>{
+  if(!navigator.bluetooth) return;
+  if(navigator.bluetooth.getDevices){
+    try{
+      const known=await navigator.bluetooth.getDevices();
+      const dev=known.find(d=>d.name===BLE_NAME)||known[0];
+      if(dev){ startAuto(dev); return; }
+    }catch(e){}
+  }
+  setStatus('Tocá "Conectar" y elegí el robot (solo la primera vez).');
+})();
+
+function onTel(ev){
+  let j; try{ j=JSON.parse(dec.decode(ev.target.value)); }catch(e){ return; }
+  $('stName').textContent=j.state||'—';
+  // El STOP solo tiene sentido peleando: se muestra recién ahí (evita apagarlo sin querer)
+  const fighting=['LAUNCH','SEARCH','ATTACK','EDGE','FIGHT'].includes(j.state);
+  $('btnStop').style.display=fighting?'':'none';
+  $('stopHint').style.display=fighting?'none':'';
+  const set=(id,v)=>$(id).classList.toggle('hi',!!v);
+  set('d_ir_fr',j.ir_fr);set('d_ir_fl',j.ir_fl);set('d_ir_sr',j.ir_sr);set('d_ir_sl',j.ir_sl);
+  // línea: HIGH=tatami, LOW=borde → prendo el punto cuando ve BORDE (line=0)
+  $('d_line_r').classList.toggle('hi',j.line_r===0);
+  $('d_line_l').classList.toggle('hi',j.line_l===0);
+  $('v_laser').textContent=(j.laser>0&&j.laser<4000)?j.laser+' mm':'— mm';
+  $('v_up').textContent=(j.uptime||0)+' s';
+}
+
+$('btnFin').onclick=()=>{
+  send(JSON.stringify(CFG));
+  setTimeout(()=>send('start'),120);   // primero la config, después el "fin de config"
+  $('btnFin').textContent='✓ ARMADO — apretá y soltá el botón del robot';
+};
+$('btnStop').onclick=()=>send('stop');
+$('btnMot').onclick=()=>{ motorsOn=!motorsOn; send(motorsOn?'motors_on':'motors_off');
+  $('btnMot').textContent=motorsOn?'Motores: ON':'Motores: OFF'; };
+$('btnMot').textContent='Motores: ON';
+</script>
+<script>
+// Registra el service worker (offline). Solo funciona hosteada (https),
+// no como archivo local — ahí simplemente no se registra y la página anda igual.
+if('serviceWorker' in navigator){ addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
+</script>
+</body>
+</html>
