@@ -1,6 +1,6 @@
 // Service worker — cachea la app para que funcione OFFLINE (sin internet).
 // Solo se registra sobre HTTPS o localhost (no en file://).
-const CACHE = 'sumo-ble-v1';
+const CACHE = 'sumo-ble-v2';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon.svg'];
 
 self.addEventListener('install', e => {
