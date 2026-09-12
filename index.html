@@ -233,6 +233,12 @@ function onTel(ev){
   const fighting=['LAUNCH','SEARCH','ATTACK','EDGE','FIGHT'].includes(j.state);
   $('btnStop').style.display=fighting?'':'none';
   $('stopHint').style.display=fighting?'none':'';
+  // Sincroniza el botón de config con el estado REAL del robot (así al
+  // reconectar tras apagar/prender vuelve solo a "Fin de config").
+  const fin=$('btnFin');
+  if(j.state==='ARMED'){ fin.textContent='✓ ARMADO — apretá y soltá el botón del robot'; fin.disabled=false; }
+  else if(fighting||j.state==='COUNTDOWN'){ fin.textContent='En combate'; fin.disabled=true; }
+  else { fin.textContent='✓ FIN DE CONFIG'; fin.disabled=false; }
   const set=(id,v)=>$(id).classList.toggle('hi',!!v);
   set('d_ir_fr',j.ir_fr);set('d_ir_fl',j.ir_fl);set('d_ir_sr',j.ir_sr);set('d_ir_sl',j.ir_sl);
   // línea: HIGH=tatami, LOW=borde → prendo el punto cuando ve BORDE (line=0)
@@ -245,7 +251,7 @@ function onTel(ev){
 $('btnFin').onclick=()=>{
   send(JSON.stringify(CFG));
   setTimeout(()=>send('start'),120);   // primero la config, después el "fin de config"
-  $('btnFin').textContent='✓ ARMADO — apretá y soltá el botón del robot';
+  // El texto lo pone la telemetría según el estado real (no lo forzamos acá).
 };
 $('btnStop').onclick=()=>send('stop');
 $('btnMot').onclick=()=>{ motorsOn=!motorsOn; send(motorsOn?'motors_on':'motors_off');
