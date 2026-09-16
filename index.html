@@ -57,6 +57,7 @@
     <span class="status" style="flex:1;align-self:center">PIN del robot (igual al del firmware)</span>
   </div>
   <div class="status" id="connStatus">Desconectado.</div>
+  <div id="authErr" class="warn hide" style="background:#3a1620;border-color:#7a2a3a;color:#ff9aa5">PIN incorrecto.</div>
 </section>
 
 <div id="app" class="hide">
@@ -115,7 +116,7 @@ const TEL='9a1e0003-7c9e-4b2a-9c3d-1f2e3a4b5c6d';
 const BLE_NAME='Sumo-Robot';   // debe coincidir con BLE_DEVICE_NAME del firmware
 
 const CFG={mySide:'L',myFacing:'F',enemyOffset:'ALIGN',launch:'DIRECT',forceLaunch:false,search:'SPIN',aggr:'CALM'};
-let device=null, cmdChar=null, telChar=null, motorsOn=true, connecting=false, autoTimer=null, userDisc=false;
+let device=null, cmdChar=null, telChar=null, motorsOn=true, connecting=false, autoTimer=null, userDisc=false, gotTelem=false, authTimer=null;
 let PIN='1234'; try{ PIN=localStorage.getItem('sumoPin')||'1234'; }catch(e){}
 
 const $=id=>document.getElementById(id);
@@ -163,8 +164,10 @@ drawDiag();
 // --- BLE: vinculado a UN robot, se conecta solo ---
 if(!navigator.bluetooth){ $('noble').classList.remove('hide'); }
 $('pin').value=PIN;
-$('pin').oninput=()=>{ PIN=$('pin').value.trim(); try{localStorage.setItem('sumoPin',PIN);}catch(e){} };
+$('pin').oninput=()=>{ PIN=$('pin').value.trim(); try{localStorage.setItem('sumoPin',PIN);}catch(e){}
+  if(cmdChar){ gotTelem=false; send('pin:'+PIN); } };   // reautentica en vivo si estás conectado
 function setStatus(t){ $('connStatus').textContent=t; }
+function showAuthErr(msg){ const e=$('authErr'); e.textContent=msg; e.classList.remove('hide'); }
 function send(str){ if(cmdChar){ try{ cmdChar.writeValueWithResponse(enc.encode(str)); }catch(e){ console.warn(e); } } }
 
 async function setupConn(dev){
@@ -176,7 +179,10 @@ async function setupConn(dev){
   telChar=await s.getCharacteristic(TEL);
   await telChar.startNotifications();
   telChar.addEventListener('characteristicvaluechanged',onTel);
-  send('pin:'+PIN);   // autenticar antes que nada (si el PIN no coincide, el robot ignora todo)
+  send('pin:'+PIN);   // autenticar antes que nada
+  gotTelem=false; $('authErr').classList.add('hide');
+  clearTimeout(authTimer);
+  authTimer=setTimeout(()=>{ if(!gotTelem) showAuthErr('Sin respuesta del robot — ¿PIN incorrecto? Corregí el PIN arriba.'); }, 2500);
   $('app').classList.remove('hide');
   $('btnConn').textContent='Desconectar';
   setStatus('Conectado a '+(dev.name||'robot')+'.');
@@ -228,6 +234,9 @@ $('btnConn').onclick=async()=>{
 
 function onTel(ev){
   let j; try{ j=JSON.parse(dec.decode(ev.target.value)); }catch(e){ return; }
+  if(j.auth==='bad'){ showAuthErr('PIN incorrecto. Corregí el PIN de arriba (tiene que coincidir con el del firmware).'); return; }
+  // Llegó telemetría normal → PIN OK: limpio el error y el timeout.
+  gotTelem=true; clearTimeout(authTimer); $('authErr').classList.add('hide');
   $('stName').textContent=j.state||'—';
   // El STOP solo tiene sentido peleando: se muestra recién ahí (evita apagarlo sin querer)
   const fighting=['LAUNCH','SEARCH','ATTACK','EDGE','FIGHT'].includes(j.state);
